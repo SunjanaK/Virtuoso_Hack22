@@ -1,0 +1,2 @@
+#!/bin/bash
+exec /Users/sunjanak/Downloads/Virtuoso-main/Virtuoso/bin/lilypond "$@"

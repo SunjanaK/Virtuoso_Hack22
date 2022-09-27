@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "iPdqrHrmmMf0tiV5cl07RL+7O1/mzAJHswuReizw+QEnkFL1xjFYjSDmXnnEgWtg9di0thTpiZAK62qzxQ83EA==",
+  "success": true,
+  "projectFilePath": "/Users/sunjanak/Downloads/Virtuoso-main/Virtuoso/Virtuoso.csproj",
+  "expectedPackageFiles": [
+    "/Users/sunjanak/.nuget/packages/microsoft.netcore.app.runtime.osx-arm64/6.0.9/microsoft.netcore.app.runtime.osx-arm64.6.0.9.nupkg.sha512",
+    "/Users/sunjanak/.nuget/packages/microsoft.aspnetcore.app.runtime.osx-arm64/6.0.9/microsoft.aspnetcore.app.runtime.osx-arm64.6.0.9.nupkg.sha512",
+    "/Users/sunjanak/.nuget/packages/microsoft.netcore.app.crossgen2.osx-x64/6.0.9/microsoft.netcore.app.crossgen2.osx-x64.6.0.9.nupkg.sha512",
+    "/Users/sunjanak/.nuget/packages/microsoft.netcore.app.host.osx-arm64/6.0.9/microsoft.netcore.app.host.osx-arm64.6.0.9.nupkg.sha512"
+  ],
+  "logs": []
+}

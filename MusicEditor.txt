@@ -1,0 +1,419 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Diagnostics;
+using System.IO;
+
+using M;
+using MusicGen;
+
+namespace MusicEdit
+{
+    class MusicEditor {
+        //your music 
+        //you can specify the instrument number, it will look for the indices with (\new \Staff \with) and find that particular line, 
+        //it will then go line by line and populate a dynamic list with noteinformation datastructures
+        //it will then prompt the user to upload changes that are comma separated, with instructions that say 
+        //to change rhythm, say "rhythm [measure] [noteNum] [numNotes] [noteRhythmVal], ie for dotted quarter say rhythm 1 2 3 8 or rhythm 1 2 6 16
+        //to insert a rest, say "rest [measure] [noteNum] r[restNum]" ie for eighth rest say rest 1 2 r[restNum] and a rest will be printed after note 2 in measure 1
+        //to delete a note, say "delete [measure] [noteNum] ie say delete 1 2 
+        public record struct NoteInformation(int length, string note, string keySig, MidiTimeSignature timeSig);
+        public record struct Measure(List<NoteInformation> notes);
+        // const int count;
+
+
+        public NoteInformation generateNote(string note, int latestRhythm){
+            //we include the latestRhythm in case the note doesn't come with a rhythm val, so we can achieve a value for length
+            
+            var sb = new StringBuilder();
+            //adding the note
+            sb.Append(note.Substring(0, 1));
+            int baseline = 4; //one below middle C octave
+            var newInfo;
+            int currInd = 1;
+            var length;
+            var count = 16;
+            if(note.Length > 1){
+                //search for sharps
+                int sharpExists = note.indexOf("is");
+                if(sharpExists >= 0){
+                    sb.Append("#");
+                    //continue after sharp
+                    currInd = sharpExists + 2;
+                }
+                //check for octaves
+                while(currInd < note.Length && string.Compare(note.Substring(currInd, 1), "'")){
+                    currInd += 1;
+                    baseline += 1;
+                }
+                while(currInd < note.Length && string.Compare(note.Substring(currInd, 1), ",")){
+                    currInd += 1;
+                    baseline -= 1;
+                }
+                sb.Append($"{baseline}");
+                int[] rhythms = new[]{16, 8, 4, 2, 1};
+                bool includesLength = false;
+                foreach(var r in rhythms){
+                    if(note.indexOf($"{r}") >= 0){
+                        length = count / r;
+                        includesLength = true;
+                        break;
+                    }
+                }
+                if(!includesLength){
+                    length = count / latestRhythm;
+                }
+            } else {
+                length = count / latestRhythm;
+            }
+            if(!string.Compare(note.indexOf(note.Length-1), "~")){
+                sb.Append("~");
+            }
+            newInfo = new NoteInformation(){
+                length = length,
+                note = sb.ToString(), //inclusive of note, sharp, octave
+                keySig = "",
+                timeSig = null
+            };
+            return newInfo;
+        }
+
+
+        
+        public void generateEdit(string fileName)
+        {
+            var sb2 = new StringBuilder();
+            var format = $"{fileName}.ly";
+            var lines = File.ReadAllLines(format).ToList();
+            int count = 16;
+            int index = 0;
+            int staffIndex = 0;
+            int startingMeasure = 0;
+            int endingMeasure = 0;
+            bool startingMeasureHit = false;
+            var measures = new List<Measure>();
+            Console.WriteLine("input the number of the part you want to edit, starting from 1");
+            int input = int.Parse(Console.ReadLine());
+
+
+            
+            
+            foreach(var l in lines){
+                //exit the parser
+                if(string.Compare(l, "}}") == 0 && startingMeasureHit){
+                    endingMeasure = index - 1;
+                    startingMeasureHit = false;
+                    break;
+                }
+
+                if(l.IndexOf("\\new") != -1){
+                    staffIndex += 1;    
+                    //we've hit the part we want to edit 
+                    if(staffIndex == input){
+                        //time at index + 3
+
+                        //skip 5 lines
+                        
+                        startingMeasure = index + 6;
+                        startingMeasureHit = true;
+                    }
+                    
+
+
+                }
+                index += 1;
+
+            }
+
+            //generating measures and notes inside the measures
+            var mL = new List<Measure>();
+            var tempStartingMeasure = startingMeasure;
+            
+            while(tempStartingMeasure <= endingMeasure){
+                var nL = new List<NoteInformation>();
+                var currLine = lines[startingMeasure];
+                var currLineNotes = currLine.Split(" ");
+                foreach(var note in currLineNotes){
+                    //TODO: need keysig and timesig
+                    nL.Add(generateNote(note));
+                }
+                var m = new Measure(){
+                    notes = nL
+                };
+                mL.Add(m);
+                tempStartingMeasure += 1;
+            }
+
+            //after all measures have been added, we enact the program
+            Console.WriteLine("to change rhythm, say rhythm [measure] [noteNum] [numNotes] [noteRhythmVal], ie for dotted quarter say rhythm 1 2 3 8 or rhythm 1 2 6 16");
+            Console.WriteLine("to insert a rest, say rest [measure] [noteNum] [restNum] ie for eighth rest say rest 1 2 8 and an eighth rest will be printed after note 2 in measure 1");
+            Console.WriteLine("to delete a note, say delete [measure] [noteNum] ie say delete 1 2");
+            string[] splitInput = Console.ReadLine().Split(" ");
+            if(string.Compare(splitInput[0], "rhythm") == 0){
+                var measure = int.Parse(splitInput[1]);
+                var noteNum = int.Parse(splitInput[2]);
+                var num = int.Parse(splitInput[3]);
+                var denom = int.Parse(splitInput[4]);
+                var newLength = count/denom * num; //length in 16ths
+                var newInfo = new NoteInformation(){
+                    length = newLength,
+                    note = mL[measure].notes[noteNum].note,
+                    keySig = mL[measure].notes[noteNum].keySig,
+                    timeSig = mL[measure].notes[noteNum].timeSig
+                };
+                mL[measure].notes[noteNum] = newInfo;
+            } else if (string.Compare(splitInput[0], "rest") == 0){
+                var measure = int.Parse(splitInput[1]);
+                var noteNum = int.Parse(splitInput[2]);
+                var restLength = int.Parse(splitInput[3]);
+                var currentNote = mL[measure].notes[noteNum];
+                var newInfo = new NoteInformation(){
+                    length = restLength,
+                    note = "r", //inclusive of note, sharp, octave, if it's a rest, leave it as r 
+                    keySig = currentNote.keySig,
+                    timeSig = currentNote.timeSig
+                };
+                mL[measure].notes.Insert(noteNum + 1, newInfo);
+            } else if (string.Compare(splitInput[0], "delete") == 0){
+                var measure = int.Parse(splitInput[1]);
+                var noteNum = int.Parse(splitInput[2]);
+                //removing item
+                mL[measure].notes.RemoveAt(noteNum);
+            } else {
+                Console.WriteLine("invalid input");
+            }
+
+            //updating the items
+            // sb.AppendLine("\\clef treble");
+            int baseApostrophe = 5;
+            int baseComma = 3;
+            //the latest time signature in a string
+            // string lastTimeSignature = noteInfs[0].timeSig.ToString();
+            // //the latest key signature in a string 
+            // string lastKeySignature = noteInfs[0].keySig.ToString();
+
+            //the latest rhythm val of a note
+            var latestRhythm = count / (mL[0].notes[0].length); //gives the lilypond rhythm val
+            int i = 0;    
+            
+            foreach(var m in mL){
+                var nNum = 0;
+                foreach(var noteInfo in m.notes){
+                if(nNum == 0){
+                    //new measure has begun 
+                    sb2.Append($"{noteInfo.note[0].ToString().ToLower()}");
+                    int currOctave;
+
+                    //there aren't any flats rn
+                    if(noteInfo.note.Length == 3){
+                        sb2.Append("is");
+                        //append octave 
+                        currOctave = int.Parse(noteInfo.note[2].ToString());
+                    } else {
+                        //append octave 
+                        currOctave = int.Parse(noteInfo.note[1].ToString());
+                    }
+                                            
+                    // int currOctave = int.Parse(noteInfo.note[1].ToString());
+                    if(currOctave >= baseApostrophe){
+                        while(currOctave >= baseApostrophe){
+                            sb2.Append("'");
+                            currOctave -= 1;
+                        }
+                    } else {
+                        if(currOctave <= baseComma){
+                            while(currOctave <= baseComma){
+                                sb2.Append(",");
+                                currOctave += 1;
+                            }
+                        }
+                    }
+                    //get Rhythm
+                    var currentRhythm = count / noteInfo.length;
+                    sb2.Append($"{currentRhythm} ");
+                    latestRhythm = currentRhythm;
+                } else {
+                    sb2.Append($"{noteInfo.note[0].ToString().ToLower()}");
+                    if(noteInfo.note.Length == 1){
+                        //figure out if rhythm annotation is needed
+                        var currentRhythm = count / noteInfo.Length;
+                        if(currentRhythm != latestRhythm){
+                            //initialize for first ever note or update rhythm if it changes
+                            sb2.Append($"{currentRhythm} ");
+                            latestRhythm = currentRhythm;
+                        } else {
+                            sb2.Append(" ");
+                        }
+
+                    }
+                    else if(noteInfo.note.Length == 2){
+                        if(string.Compare(noteInfo.note.Substring(1, 1), "#") == 0){
+                            sb2.Append("is");
+                            //figure out if rhythm annotation is needed 
+                            var currentRhythm = count / noteInfo.length;
+                            if(currentRhythm != latestRhythm){
+                            //initialize for first ever note or update rhythm if it changes
+                            sb2.Append($"{currentRhythm} ");
+                            latestRhythm = currentRhythm;
+                            } else {
+                                sb2.Append(" ");
+                            }
+                        } 
+                        else if(string.Compare(noteInfo.note.Substring(1, 1), "~") == 0){
+                            //figure out if rhythm annotation is needed 
+                            var currentRhythm = count / noteInfo.length;
+                            if(currentRhythm != latestRhythm){
+                            //initialize for first ever note or update rhythm if it changes
+                            sb2.Append($"{currentRhythm}");
+                            latestRhythm = currentRhythm;
+                            sb2.Append("~");
+                            } else {
+                                sb2.Append("~");
+                            }
+                            
+                        } else {
+                            //we know it's an octave 
+                            int currOctave = int.Parse(noteInfo.note.Substring(1, 1));
+                            if(currOctave >= baseApostrophe){
+                                while(currOctave >= baseApostrophe){
+                                    sb2.Append("'");
+                                    currOctave -= 1;
+                                }
+                            } else {
+                                if(currOctave <= baseComma){
+                                    while(currOctave <= baseComma){
+                                        sb2.Append(",");
+                                        currOctave += 1;
+                                    }
+                                }
+                            }
+                            //figure out if rhythm annotation is needed
+                            var currentRhythm = count / noteInfo.length;
+                            if(currentRhythm != latestRhythm){
+                            //initialize for first ever note or update rhythm if it changes
+                            sb2.Append($"{currentRhythm} ");
+                            latestRhythm = currentRhythm;
+                            } else {
+                                sb2.Append(" ");
+                            }
+                             
+                        }
+                    } else if(noteInfo.note.Length == 3){
+                        if(string.Compare(noteInfo.note.Substring(1, 1), "#") == 0){
+                            sb2.Append("is");
+                            //check if tie
+                            if(string.Compare(noteInfo.note.Substring(2, 1), "~") == 0){
+                                //figure out if rhythm annotation is needed 
+                                var currentRhythm = count / noteInfo.length;
+                                if(currentRhythm != latestRhythm){
+                                //initialize for first ever note or update rhythm if it changes
+                                sb2.Append($"{currentRhythm}");
+                                latestRhythm = currentRhythm;
+                                sb2.Append("~");
+                                } else {
+                                    sb2.Append("~");
+                                }
+                            } else {
+                                int currOctave = int.Parse(noteInfo.note.Substring(2, 1));
+                                if(currOctave >= baseApostrophe){
+                                while(currOctave >= baseApostrophe){
+                                    sb2.Append("'");
+                                    currOctave -= 1;
+                                }
+                                } else {
+                                    if(currOctave <= baseComma){
+                                        while(currOctave <= baseComma){
+                                            sb2.Append(",");
+                                            currOctave += 1;
+                                        }
+                                    }
+                                }
+                                //figure out if rhythm annotation is needed 
+                                var currentRhythm = count / noteInfo.length;
+                                if(currentRhythm != latestRhythm){
+                                //initialize for first ever note or update rhythm if it changes
+                                sb2.Append($"{currentRhythm} ");
+                                latestRhythm = currentRhythm;
+                                } else {
+                                    sb2.Append(" ");
+                                }
+                            }
+                        } else {
+                            //we know first note is an octave 
+                            int currOctave = int.Parse(noteInfo.note.Substring(1, 1));
+                            if(currOctave >= baseApostrophe){
+                                while(currOctave >= baseApostrophe){
+                                    sb2.Append("'");
+                                    currOctave -= 1;
+                                }
+                            } else {
+                                if(currOctave <= baseComma){
+                                    while(currOctave <= baseComma){
+                                        sb2.Append(",");
+                                        currOctave += 1;
+                                    }
+                                }
+                            }
+                            //figure out if rhythm annotation is needed 
+                            var currentRhythm = count / noteInfo.length;
+                            if(currentRhythm != latestRhythm){
+                            //initialize for first ever note or update rhythm if it changes
+                            sb2.Append($"{currentRhythm}");
+                            latestRhythm = currentRhythm;
+                            sb2.Append("~");
+                            } else {
+                                sb2.Append("~");
+                            }
+                        }
+                    } else {
+                        sb2.Append("is");
+                        int currOctave = int.Parse(noteInfo.note.Substring(2, 1));
+                        if(currOctave >= baseApostrophe){
+                            while(currOctave >= baseApostrophe){
+                                sb2.Append("'");
+                                currOctave -= 1;
+                            }
+                        } else {
+                            if(currOctave <= baseComma){
+                                while(currOctave <= baseComma){
+                                    sb2.Append(",");
+                                    currOctave += 1;
+                                }
+                            }
+                        }
+                        //figure out if rhythm annotation is needed 
+                        var currentRhythm = count / noteInfo.length;
+                        if(currentRhythm != latestRhythm){
+                        //initialize for first ever note or update rhythm if it changes
+                        sb2.Append($"{currentRhythm}");
+                        latestRhythm = currentRhythm;
+                        sb2.Append("~");
+                        } else {
+                            sb2.Append("~");
+                        }
+                    }
+                    //
+                }
+                
+                
+                i += 1;
+
+                }
+                
+            }
+
+        //put it into a file
+        var prevLines = lines.GetRange(0, startingMeasure);
+        var currLines = sb.ToString().split("\n");
+        var forwardLines = lines.GetRange(endingMeasure+1, lines.Count-(endingMeasure+1));
+
+        var result = prevLines.Concat(currLines).Concat(forwardLines).ToList();
+        System.IO.File.WriteAllLines(@"twinkleEdited.ly",result.ToString());
+
+
+
+        }
+
+
+    }
+}

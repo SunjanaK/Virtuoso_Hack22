@@ -1,0 +1,2 @@
+/Users/sunjanak/Downloads/Virtuoso-main/Virtuoso/bin/Debug/net6.0/osx-arm64/publish/Virtuoso.pdb
+/Users/sunjanak/Downloads/Virtuoso-main/Virtuoso/bin/Debug/net6.0/osx-arm64/publish/Virtuoso
